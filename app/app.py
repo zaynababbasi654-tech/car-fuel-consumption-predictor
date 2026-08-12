@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
+import requests
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -20,25 +21,57 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Temporary local location for downloaded model
 MODEL_PATH = os.path.join(
     BASE_DIR,
-    "models",
     "fuel_consumption_model.pkl"
+)
+
+# Hugging Face model URL
+MODEL_URL = (
+    "https://huggingface.co/"
+    "Zaynababbasi654/car-fuel-consumption-model/"
+    "resolve/main/fuel_consumption_model.pkl"
 )
 
 DATA_PATH = os.path.join(
     BASE_DIR,
     "data",
     "raw",
-    "Fuel_consumption_2000-2022.csv"
+    "fuel_consumption_2000-2022.csv"
 )
 
 # ============================================================
-# CACHED MODEL
+# DOWNLOAD + LOAD MODEL
 # ============================================================
 
 @st.cache_resource
 def load_model():
+
+    if not os.path.exists(MODEL_PATH):
+
+        st.info(
+            "⏳ Downloading machine learning model... "
+            "Please wait."
+        )
+
+        response = requests.get(
+            MODEL_URL,
+            stream=True,
+            timeout=600
+        )
+
+        response.raise_for_status()
+
+        with open(MODEL_PATH, "wb") as f:
+
+            for chunk in response.iter_content(
+                chunk_size=1024 * 1024
+            ):
+
+                if chunk:
+                    f.write(chunk)
+
     return joblib.load(MODEL_PATH)
 
 
@@ -48,6 +81,7 @@ def load_model():
 
 @st.cache_data
 def load_dataset():
+
     data = pd.read_csv(DATA_PATH)
 
     data.columns = (
@@ -64,12 +98,18 @@ def load_dataset():
 # ============================================================
 
 try:
+
     model = load_model()
     df = load_dataset()
 
 except Exception as e:
-    st.error("❌ Could not load model or dataset.")
+
+    st.error(
+        "❌ Could not load model or dataset."
+    )
+
     st.code(str(e))
+
     st.stop()
 
 
@@ -88,13 +128,16 @@ required_columns = [
 ]
 
 missing_columns = [
-    col for col in required_columns
+    col
+    for col in required_columns
     if col not in df.columns
 ]
 
 if missing_columns:
 
-    st.error("❌ Required columns are missing.")
+    st.error(
+        "❌ Required columns are missing."
+    )
 
     st.write("Missing:")
     st.write(missing_columns)
@@ -224,7 +267,9 @@ pakistan_cars = {
 # HEADER
 # ============================================================
 
-st.title("🚗 Car Fuel Consumption Predictor")
+st.title(
+    "🚗 Car Fuel Consumption Predictor"
+)
 
 st.markdown(
     """
@@ -381,7 +426,7 @@ transmission = st.selectbox(
 
 
 # ============================================================
-# USER FRIENDLY FUEL TYPES
+# FUEL TYPE
 # ============================================================
 
 st.subheader("⛽ Fuel Type")
@@ -434,7 +479,9 @@ else:
 
 st.divider()
 
-st.subheader("💰 Fuel Cost Calculator")
+st.subheader(
+    "💰 Fuel Cost Calculator"
+)
 
 currency_option = st.selectbox(
     "Currency",
@@ -519,7 +566,10 @@ if predict_button:
         st.stop()
 
 
-    if fuel_display == "Other / Manual" and not fuel.strip():
+    if (
+        fuel_display == "Other / Manual"
+        and not fuel.strip()
+    ):
 
         st.warning(
             "⚠️ Please enter your fuel type/code."
@@ -570,7 +620,10 @@ if predict_button:
     # SAFETY
     # --------------------------------------------------------
 
-    prediction = max(prediction, 0)
+    prediction = max(
+        prediction,
+        0
+    )
 
 
     # ========================================================
@@ -611,9 +664,20 @@ if predict_button:
     # COST
     # ========================================================
 
-    cost_100 = fuel_100 * fuel_price
-    cost_500 = fuel_500 * fuel_price
-    cost_1000 = fuel_1000 * fuel_price
+    cost_100 = (
+        fuel_100 *
+        fuel_price
+    )
+
+    cost_500 = (
+        fuel_500 *
+        fuel_price
+    )
+
+    cost_1000 = (
+        fuel_1000 *
+        fuel_price
+    )
 
 
     # ========================================================
@@ -622,11 +686,11 @@ if predict_button:
 
     st.divider()
 
-    st.subheader("📊 Prediction Results")
-
+    st.subheader(
+        "📊 Prediction Results"
+    )
 
     result1, result2, result3 = st.columns(3)
-
 
     with result1:
 
@@ -635,14 +699,12 @@ if predict_button:
             f"{prediction:.2f} L/100 km"
         )
 
-
     with result2:
 
         st.metric(
             "Efficiency Rating",
             f"{emoji} {rating}"
         )
-
 
     with result3:
 
@@ -656,29 +718,28 @@ if predict_button:
     # CAR SUMMARY
     # ========================================================
 
-    st.subheader("🚘 Car Summary")
+    st.subheader(
+        "🚘 Car Summary"
+    )
 
-
-    summary1, summary2, summary3, summary4 = st.columns(4)
-
+    summary1, summary2, summary3, summary4 = (
+        st.columns(4)
+    )
 
     with summary1:
 
         st.write("**Make**")
         st.write(make)
 
-
     with summary2:
 
         st.write("**Model**")
         st.write(model_name)
 
-
     with summary3:
 
         st.write("**Year**")
         st.write(year)
-
 
     with summary4:
 
@@ -690,11 +751,11 @@ if predict_button:
     # FUEL USAGE
     # ========================================================
 
-    st.subheader("⛽ Estimated Fuel Usage")
-
+    st.subheader(
+        "⛽ Estimated Fuel Usage"
+    )
 
     fuel1, fuel2, fuel3 = st.columns(3)
-
 
     with fuel1:
 
@@ -703,14 +764,12 @@ if predict_button:
             f"{fuel_100:.2f} L"
         )
 
-
     with fuel2:
 
         st.metric(
             "500 km",
             f"{fuel_500:.2f} L"
         )
-
 
     with fuel3:
 
@@ -724,33 +783,34 @@ if predict_button:
     # COST
     # ========================================================
 
-    st.subheader("💰 Estimated Fuel Cost")
-
+    st.subheader(
+        "💰 Estimated Fuel Cost"
+    )
 
     cost1, cost2, cost3 = st.columns(3)
-
 
     with cost1:
 
         st.metric(
             "100 km",
-            f"{currency_symbol} {cost_100:,.2f}"
+            f"{currency_symbol} "
+            f"{cost_100:,.2f}"
         )
-
 
     with cost2:
 
         st.metric(
             "500 km",
-            f"{currency_symbol} {cost_500:,.2f}"
+            f"{currency_symbol} "
+            f"{cost_500:,.2f}"
         )
-
 
     with cost3:
 
         st.metric(
             "1000 km",
-            f"{currency_symbol} {cost_1000:,.2f}"
+            f"{currency_symbol} "
+            f"{cost_1000:,.2f}"
         )
 
 
@@ -791,5 +851,6 @@ st.divider()
 
 st.caption(
     "🚗 Car Fuel Consumption Predictor | "
-    "Random Forest Regression | Machine Learning Project"
+    "Random Forest Regression | "
+    "Machine Learning Project"
 )
