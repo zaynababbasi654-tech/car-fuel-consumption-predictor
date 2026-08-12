@@ -4,6 +4,7 @@ import joblib
 import os
 import requests
 
+
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
@@ -15,34 +16,81 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # ============================================================
-# PATHS
+# PROJECT BASE DIRECTORY
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# Temporary local location for downloaded model
-MODEL_PATH = os.path.join(
-    BASE_DIR,
-    "fuel_consumption_model.pkl"
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
 )
 
-# Hugging Face model URL
+
+# ============================================================
+# HUGGING FACE MODEL
+# ============================================================
+
 MODEL_URL = (
     "https://huggingface.co/"
     "Zaynababbasi654/car-fuel-consumption-model/"
     "resolve/main/fuel_consumption_model.pkl"
 )
 
-DATA_PATH = os.path.join(
+MODEL_PATH = os.path.join(
     BASE_DIR,
-    "data",
-    "raw",
-    "Fuel_consumption_2000-2022.csv"
+    "fuel_consumption_model.pkl"
 )
 
+
 # ============================================================
-# DOWNLOAD + LOAD MODEL
+# FIND DATASET AUTOMATICALLY
+# ============================================================
+
+DATA_DIR = os.path.join(
+    BASE_DIR,
+    "data"
+)
+
+csv_files = []
+
+if os.path.exists(DATA_DIR):
+
+    for root, dirs, files in os.walk(DATA_DIR):
+
+        for file in files:
+
+            if file.lower().endswith(".csv"):
+
+                csv_files.append(
+                    os.path.join(root, file)
+                )
+
+
+if not csv_files:
+
+    st.error(
+        "❌ No CSV dataset found inside the data folder."
+    )
+
+    st.write(
+        "Expected structure:"
+    )
+
+    st.code(
+        "data/raw/Fuel_consumption_2000-2022.csv"
+    )
+
+    st.stop()
+
+
+# Use the first CSV found
+DATA_PATH = csv_files[0]
+
+
+# ============================================================
+# LOAD MODEL
 # ============================================================
 
 @st.cache_resource
@@ -51,66 +99,112 @@ def load_model():
     if not os.path.exists(MODEL_PATH):
 
         st.info(
-            "⏳ Downloading machine learning model... "
-            "Please wait."
+            "⏳ Downloading Machine Learning model..."
         )
 
-        response = requests.get(
-            MODEL_URL,
-            stream=True,
-            timeout=600
+        try:
+
+            response = requests.get(
+                MODEL_URL,
+                stream=True,
+                timeout=1200
+            )
+
+            response.raise_for_status()
+
+            with open(
+                MODEL_PATH,
+                "wb"
+            ) as file:
+
+                for chunk in response.iter_content(
+                    chunk_size=1024 * 1024
+                ):
+
+                    if chunk:
+
+                        file.write(chunk)
+
+        except Exception as e:
+
+            st.error(
+                "❌ Could not download the Machine Learning model."
+            )
+
+            st.code(
+                str(e)
+            )
+
+            st.stop()
+
+    try:
+
+        return joblib.load(
+            MODEL_PATH
         )
 
-        response.raise_for_status()
+    except Exception as e:
 
-        with open(MODEL_PATH, "wb") as f:
+        st.error(
+            "❌ Could not load the Machine Learning model."
+        )
 
-            for chunk in response.iter_content(
-                chunk_size=1024 * 1024
-            ):
+        st.code(
+            str(e)
+        )
 
-                if chunk:
-                    f.write(chunk)
-
-    return joblib.load(MODEL_PATH)
+        st.stop()
 
 
 # ============================================================
-# CACHED DATASET
+# LOAD DATASET
 # ============================================================
 
 @st.cache_data
 def load_dataset():
 
-    data = pd.read_csv(DATA_PATH)
+    try:
 
-    data.columns = (
-        data.columns
-        .str.strip()
-        .str.lower()
-    )
+        data = pd.read_csv(
+            DATA_PATH
+        )
 
-    return data
+        data.columns = (
+            data.columns
+            .str.strip()
+            .str.lower()
+        )
+
+        return data
+
+    except Exception as e:
+
+        st.error(
+            "❌ Could not load the dataset."
+        )
+
+        st.code(
+            str(e)
+        )
+
+        st.write(
+            "Dataset path being used:"
+        )
+
+        st.code(
+            DATA_PATH
+        )
+
+        st.stop()
 
 
 # ============================================================
-# LOAD
+# LOAD MODEL AND DATASET
 # ============================================================
 
-try:
+model = load_model()
 
-    model = load_model()
-    df = load_dataset()
-
-except Exception as e:
-
-    st.error(
-        "❌ Could not load model or dataset."
-    )
-
-    st.code(str(e))
-
-    st.stop()
+df = load_dataset()
 
 
 # ============================================================
@@ -127,23 +221,35 @@ required_columns = [
     "fuel"
 ]
 
+
 missing_columns = [
-    col
-    for col in required_columns
-    if col not in df.columns
+    column
+    for column in required_columns
+    if column not in df.columns
 ]
+
 
 if missing_columns:
 
     st.error(
-        "❌ Required columns are missing."
+        "❌ Required columns are missing from the dataset."
     )
 
-    st.write("Missing:")
-    st.write(missing_columns)
+    st.write(
+        "Missing columns:"
+    )
 
-    st.write("Available columns:")
-    st.write(df.columns.tolist())
+    st.write(
+        missing_columns
+    )
+
+    st.write(
+        "Available columns:"
+    )
+
+    st.write(
+        df.columns.tolist()
+    )
 
     st.stop()
 
@@ -276,7 +382,8 @@ st.markdown(
     ### Smart Fuel Efficiency Analysis
 
     Enter your car details and our Machine Learning model
-    will estimate fuel consumption, efficiency and fuel usage.
+    will estimate fuel consumption, efficiency, fuel usage
+    and estimated fuel cost.
     """
 )
 
@@ -289,7 +396,9 @@ st.divider()
 
 with st.sidebar:
 
-    st.header("⚙️ Input Settings")
+    st.header(
+        "⚙️ Input Settings"
+    )
 
     input_mode = st.radio(
         "Choose Input Method",
@@ -303,15 +412,16 @@ with st.sidebar:
 
     st.info(
         """
-        **Model**
+        **Machine Learning Model**
 
         Random Forest Regression
 
-        Output:
-        Fuel Consumption
-        + Efficiency Rating
-        + Fuel Usage
-        + Estimated Cost
+        **Outputs**
+
+        • Fuel Consumption
+        • Efficiency Rating
+        • Fuel Usage
+        • Estimated Cost
         """
     )
 
@@ -320,7 +430,9 @@ with st.sidebar:
 # CAR INFORMATION
 # ============================================================
 
-st.subheader("🚘 Car Information")
+st.subheader(
+    "🚘 Car Information"
+)
 
 col1, col2 = st.columns(2)
 
@@ -335,7 +447,9 @@ if input_mode == "🇵🇰 Pakistani Car List":
 
         make = st.selectbox(
             "🏭 Car Make",
-            sorted(pakistan_cars.keys())
+            sorted(
+                pakistan_cars.keys()
+            )
         )
 
     with col2:
@@ -368,6 +482,7 @@ else:
 
 col3, col4 = st.columns(2)
 
+
 with col3:
 
     year = st.number_input(
@@ -377,6 +492,7 @@ with col3:
         value=2020,
         step=1
     )
+
 
 with col4:
 
@@ -401,6 +517,7 @@ vehicle_classes = sorted(
     .tolist()
 )
 
+
 vehicle_class = st.selectbox(
     "🚙 Vehicle Class",
     vehicle_classes
@@ -419,6 +536,7 @@ transmissions = sorted(
     .tolist()
 )
 
+
 transmission = st.selectbox(
     "⚙️ Transmission",
     transmissions
@@ -429,7 +547,10 @@ transmission = st.selectbox(
 # FUEL TYPE
 # ============================================================
 
-st.subheader("⛽ Fuel Type")
+st.subheader(
+    "⛽ Fuel Type"
+)
+
 
 fuel_display = st.selectbox(
     "Select Fuel Type",
@@ -444,7 +565,7 @@ fuel_display = st.selectbox(
 
 
 # ============================================================
-# MAP USER FUEL TO DATASET FUEL
+# FUEL MAPPING
 # ============================================================
 
 fuel_mapping = {
@@ -470,7 +591,9 @@ if fuel_display == "Other / Manual":
 
 else:
 
-    fuel = fuel_mapping[fuel_display]
+    fuel = fuel_mapping[
+        fuel_display
+    ]
 
 
 # ============================================================
@@ -482,6 +605,7 @@ st.divider()
 st.subheader(
     "💰 Fuel Cost Calculator"
 )
+
 
 currency_option = st.selectbox(
     "Currency",
@@ -520,21 +644,33 @@ if currency_option == "Other / Manual":
 else:
 
     currency_symbol = {
+
         "PKR": "PKR",
+
         "USD": "$",
+
         "AED": "AED"
+
     }[currency_option]
 
+
     default_prices = {
+
         "PKR": 270.0,
+
         "USD": 0.75,
+
         "AED": 2.75
+
     }
+
 
     fuel_price = st.number_input(
         f"Fuel Price per Liter ({currency_option})",
         min_value=0.0,
-        value=default_prices[currency_option],
+        value=default_prices[
+            currency_option
+        ],
         step=0.1
     )
 
@@ -544,6 +680,7 @@ else:
 # ============================================================
 
 st.divider()
+
 
 predict_button = st.button(
     "🔮 Predict Fuel Consumption",
@@ -557,7 +694,10 @@ predict_button = st.button(
 
 if predict_button:
 
-    if not make.strip() or not model_name.strip():
+    if (
+        not make.strip()
+        or not model_name.strip()
+    ):
 
         st.warning(
             "⚠️ Please enter/select both Make and Model."
@@ -578,31 +718,35 @@ if predict_button:
         st.stop()
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # INPUT DATA
-    # --------------------------------------------------------
+    # ========================================================
 
     car_data = pd.DataFrame(
-        [{
-            "year": year,
-            "make": make.strip(),
-            "model": model_name.strip(),
-            "vehicle class": vehicle_class,
-            "engine size": engine_size,
-            "transmission": transmission,
-            "fuel": fuel
-        }]
+        [
+            {
+                "year": year,
+                "make": make.strip(),
+                "model": model_name.strip(),
+                "vehicle class": vehicle_class,
+                "engine size": engine_size,
+                "transmission": transmission,
+                "fuel": fuel
+            }
+        ]
     )
 
 
-    # --------------------------------------------------------
-    # PREDICTION
-    # --------------------------------------------------------
+    # ========================================================
+    # MODEL PREDICTION
+    # ========================================================
 
     try:
 
         prediction = float(
-            model.predict(car_data)[0]
+            model.predict(
+                car_data
+            )[0]
         )
 
     except Exception as e:
@@ -611,14 +755,16 @@ if predict_button:
             "❌ Prediction failed."
         )
 
-        st.code(str(e))
+        st.code(
+            str(e)
+        )
 
         st.stop()
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # SAFETY
-    # --------------------------------------------------------
+    # ========================================================
 
     prediction = max(
         prediction,
@@ -661,22 +807,22 @@ if predict_button:
 
 
     # ========================================================
-    # COST
+    # FUEL COST
     # ========================================================
 
     cost_100 = (
-        fuel_100 *
-        fuel_price
+        fuel_100
+        * fuel_price
     )
 
     cost_500 = (
-        fuel_500 *
-        fuel_price
+        fuel_500
+        * fuel_price
     )
 
     cost_1000 = (
-        fuel_1000 *
-        fuel_price
+        fuel_1000
+        * fuel_price
     )
 
 
@@ -690,7 +836,11 @@ if predict_button:
         "📊 Prediction Results"
     )
 
-    result1, result2, result3 = st.columns(3)
+
+    result1, result2, result3 = (
+        st.columns(3)
+    )
+
 
     with result1:
 
@@ -699,12 +849,14 @@ if predict_button:
             f"{prediction:.2f} L/100 km"
         )
 
+
     with result2:
 
         st.metric(
             "Efficiency Rating",
             f"{emoji} {rating}"
         )
+
 
     with result3:
 
@@ -722,29 +874,36 @@ if predict_button:
         "🚘 Car Summary"
     )
 
+
     summary1, summary2, summary3, summary4 = (
         st.columns(4)
     )
+
 
     with summary1:
 
         st.write("**Make**")
         st.write(make)
 
+
     with summary2:
 
         st.write("**Model**")
         st.write(model_name)
+
 
     with summary3:
 
         st.write("**Year**")
         st.write(year)
 
+
     with summary4:
 
         st.write("**Engine**")
-        st.write(f"{engine_size} L")
+        st.write(
+            f"{engine_size} L"
+        )
 
 
     # ========================================================
@@ -755,7 +914,11 @@ if predict_button:
         "⛽ Estimated Fuel Usage"
     )
 
-    fuel1, fuel2, fuel3 = st.columns(3)
+
+    fuel1, fuel2, fuel3 = (
+        st.columns(3)
+    )
+
 
     with fuel1:
 
@@ -764,12 +927,14 @@ if predict_button:
             f"{fuel_100:.2f} L"
         )
 
+
     with fuel2:
 
         st.metric(
             "500 km",
             f"{fuel_500:.2f} L"
         )
+
 
     with fuel3:
 
@@ -787,7 +952,11 @@ if predict_button:
         "💰 Estimated Fuel Cost"
     )
 
-    cost1, cost2, cost3 = st.columns(3)
+
+    cost1, cost2, cost3 = (
+        st.columns(3)
+    )
+
 
     with cost1:
 
@@ -797,6 +966,7 @@ if predict_button:
             f"{cost_100:,.2f}"
         )
 
+
     with cost2:
 
         st.metric(
@@ -804,6 +974,7 @@ if predict_button:
             f"{currency_symbol} "
             f"{cost_500:,.2f}"
         )
+
 
     with cost3:
 
