@@ -38,7 +38,7 @@ DATA_PATH = os.path.join(
     BASE_DIR,
     "data",
     "raw",
-    "fuel_consumption_2000-2022.csv"
+    "Fuel_consumption_2000-2022.csv"
 )
 
 # ============================================================
